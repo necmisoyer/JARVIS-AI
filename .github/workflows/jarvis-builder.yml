@@ -1,0 +1,53 @@
+name: JARVIS APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK kur
+        uses: android-actions/setup-android@v3
+
+      - name: Android bileşenlerini yükle
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: JARVIS ZIP dosyasını aç
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then echo 'JARVIS ZIP dosyası depoda bulunamadı'; exit 1; fi
+          mkdir -p /tmp/jarvis-source
+          unzip -q "$ZIP_FILE" -d /tmp/jarvis-source
+          PROJECT_DIR=$(find /tmp/jarvis-source -name settings.gradle -type f -printf '%h\n' | head -n 1)
+          if [ -z "$PROJECT_DIR" ]; then echo 'settings.gradle bulunamadı'; exit 1; fi
+          cp -a "$PROJECT_DIR"/. "$GITHUB_WORKSPACE"/
+
+      - name: Gradle kur
+        run: |
+          curl -L https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo '/tmp/gradle-8.9/bin' >> "$GITHUB_PATH"
+
+      - name: APK derle
+        run: gradle --no-daemon assembleDebug
+
+      - name: APK dosyasını kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVIS-debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
